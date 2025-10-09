@@ -75,215 +75,75 @@
 
 </script>
 
-<script type='text/javascript'>
-    RED.nodes.registerType('zigbee2mqtt-out', {
-        category: 'Zigbee2mqtt',
-        color: '#FDBF48',
-        align: 'right',
-        defaults: {
-            name: {
-                value: ""
-            },
-            server: {
-                type: "zigbee2mqtt-server",
-                required: true
-            },
-            friendly_name: {
-                value: "",
-                required: false
-            },
-            device_id: {
-                value: null
-            },
-            command: {
-                value: 'state',
-            },
-            commandType: {
-                value: 'z2m_cmd',
-            },
-            payload: {
-                value: 'payload',
-            },
-            payloadType: {
-                value: 'msg',
-            },
-            optionsValue: {
-                value: null,
-            },
-            optionsType: {
-                value: null,
-            },
-            // enableMultiple: {
-            //     value: false,
-            //     required: true
-            // },
-        },
-        inputLabels: "value",
-        paletteLabel: 'out',
-        inputs: 1,
-        outputs: 0,
-        icon: "icon.png",
-        label: function() {
-            var label = 'z2m-out';
+<script type="text/javascript">
+RED.nodes.registerType('zigbee2mqtt-out', {
+    category: 'zigbee2mqtt',
+    color: '#E2D96E',
+    defaults: {
+        device: { value: "" },
+        attribute: { value: "" },
+        name: { value: "" }
+    },
+    inputs: 1,
+    outputs: 0,
+    icon: "bridge.svg",
+    label: function() {
+        return this.name || this.device || "zigbee2mqtt out";
+    },
+    oneditprepare: function() {
+        const deviceSelect = $("#node-input-device");
+        const attributeSelect = $("#node-input-attribute");
 
-            if (this.name) {
-                label = this.name;
-            } else if (typeof(this.friendly_name) == 'string' && this.friendly_name.length) {
-                label = this.friendly_name;
-            } else if (typeof(this.device_id) == 'string') {
-                label = this.device_id;
-            }
-            return label;
-        },
-        oneditprepare: function() {
-            let node = this;
-            let $inputCommand = $('#node-input-command');
-            let $inputCommandType = $('#node-input-commandType');
-
-            // setTimeout(()=>{
-                new Zigbee2MqttEditor(node, {
-                    'allow_empty': true
-                }).build();
-
-                showHelpBlock();
-                buildTypesInput();
-
-                $inputCommand.on('change', function(event, type, value) {
-                    $('#node-input-payload').typedInput('types', getPayloadTypes(value));
-
-                    //show/hide
-                    if ('homekit' === type || 'nothing' === type) {
-                        $('#node-input-payload').closest('.form-row').hide();
-                    } else {
-                        $('#node-input-payload').closest('.form-row').show();
-                    }
-
-                    showHelpBlock();
+        function loadDeviceList() {
+            $.getJSON('zigbee2mqtt/devices', function(devices) {
+                deviceSelect.empty();
+                devices.forEach(function(dev) {
+                    deviceSelect.append(
+                        $('<option></option>').val(dev.friendly_name).text(dev.friendly_name)
+                    );
                 });
 
-
-                //init typedInput
-                $('#node-input-payload').typedInput({
-                    types: getPayloadTypes(node.command),
-                    default: 'msg',
-                    value: 'payload',
-                    typeField: $('#node-input-payloadType'),
-                });
-                $inputCommandType.val(node.commandType);
-                $('#node-input-payloadType').val(node.payloadType);
-
-                function showHelpBlock() {
-                    var command = $('#node-input-command').val(); //state
-                    var commandType = $('#node-input-commandType').val(); //z2m_cmd
-                    if (command === '{}') command = 'json';
-                    if (commandType === 'str') command = 'custom';
-                    $('.help_block').hide();
-                    $('.help_block__'+commandType+'_'+command).show();
+                // se já havia valor guardado, recarregar os atributos
+                const savedDevice = deviceSelect.val() || $("#node-input-device").val();
+                if (savedDevice) {
+                    loadAttributes(savedDevice);
                 }
+            });
+        }
 
-
-                function buildTypesInput() {
-                    $('#node-input-command').typedInput({
-                        types: getCommandTypes(),
-                        default: 'msg',
-                        value: 'topic',
-                        typeField: $('#node-input-commandType'),
+        function loadAttributes(deviceName) {
+            $.getJSON('zigbee2mqtt/devices', function(devices) {
+                const dev = devices.find(d => d.friendly_name === deviceName);
+                attributeSelect.empty();
+                if (dev && dev.definition && dev.definition.exposes) {
+                    dev.definition.exposes.forEach(exp => {
+                        // campos simples
+                        if (exp.name) {
+                            attributeSelect.append(
+                                $('<option></option>').val(exp.name).text(exp.name)
+                            );
+                        }
+                        // se o expose tiver múltiplos features (como switches com canais)
+                        if (exp.features) {
+                            exp.features.forEach(f => {
+                                attributeSelect.append(
+                                    $('<option></option>').val(f.name).text(f.name)
+                                );
+                            });
+                        }
                     });
                 }
-
-                function getCommandTypes() {
-                    return [
-                        //z2m commands
-                        {
-                            value: 'z2m_cmd',
-                            label: 'zigbee2mqtt',
-                            icon: 'icons/node-red-contrib-zigbee2mqtt/icon.png',
-                            options: [
-                                {'value':'state', 'label':'State (on|off|toggle)'},
-                                {'value':'brightness', 'label':'Brightness (0..255)'},
-                                {'value':'brightness_move', 'label':'Brightness Move (-255...255|stop)'},
-                                {'value':'brightness_move_onoff', 'label':'Brightness Move On/Off (-255...255|stop)'},
-                                {'value':'brightness_step', 'label':'Brightness Step (-255...255)'},
-                                {'value':'brightness_step_onoff', 'label':'Brightness Step On/Off (-255...255)'},
-                                {'value':'color', 'label':'Color: {}'},
-                                {'value':'color_rgb', 'label':'Color: r,g,b'},
-                                {'value':'color_hex', 'label':'Color: #hex'},
-                                {'value':'color_hsb', 'label':'Color: h,s,b'},
-                                {'value':'color_hsv', 'label':'Color: h,s,v'},
-                                {'value':'color_hue', 'label':'Color: hue'},
-                                {'value':'color_saturation', 'label':'Color: saturation'},
-                                {'value':'color_temp', 'label':'Color Temperature (50..400)'},
-                                {'value':'color_temp_move', 'label':'Color Temperature Move (50..400|stop)'},
-                                {'value':'color_temp_step', 'label':'Color Temperature Step (50..400)'},
-                                {'value':'position', 'label':'Position (0..100)'},
-                                {'value':'scene', 'label':'Scene (0..255)'},
-                                {'value':'lock', 'label':'Lock (lock|unlock|on|off|toggle)'},
-                                {'value':'alert', 'label':'Alert'}
-                            ]
-                        },
-                        //homekit
-                        {
-                            value:'homekit',
-                            label:'homekit',
-                            icon:'icons/node-red-contrib-zigbee2mqtt/homekit-logo.png',
-                            options:[{'value':'homekit', 'label':'Apple Homekit data format'}]
-                        },
-                        {
-                            value: 'nothing',
-                            label: RED._("node-red-contrib-zigbee2mqtt/server:editor.nothing"),
-                            options:['']
-                        },
-                        {value:'str', label: 'str'},
-                        {value:'msg', label: 'msg'},
-                        {value:'json',label:'JSON',options:['{}']}
-                    ];
-                }
-
-                function getPayloadTypes(command) {
-                    let types = ['msg', 'flow', 'global', 'str', 'num', 'json'];
-                    let options = [];
-                    if ('state' === command) {
-                        options = [
-                            {'value':'on', 'label':'On'},
-                            {'value':'off', 'label':'Off'},
-                            {'value':'toggle', 'label':'Toggle'},
-                            {'value':'lock', 'label':'Lock'},
-                            {'value':'unlock', 'label':'Unlock'}
-                        ];
-                    } else if ('color_temp' === command) {
-                        options = [
-                            {'value':'50', 'label':'Cold'},
-                            {'value':'250', 'label':'White'},
-                            {'value':'400', 'label':'Warm'}
-                        ];
-                    } else if ('alert' === command) {
-                        options = [
-                            {'value':'none', 'label':'None'},
-                            {'value':'select', 'label':'Blink short'},
-                            {'value':'lselect', 'label':'Blink log'}
-                        ];
-                    }
-                    if (options.length) {
-                        const predefinedValuesPayload = {
-                            value: 'z2m_payload',
-                            label: 'zigbee2mqtt',
-                            icon: 'icons/node-red-contrib-zigbee2mqtt/icon.png',
-                            options
-                        };
-                        return [predefinedValuesPayload, ...types]
-                    } else {
-                        return types;
-                    }
-                }
-            // }, 100); //need timeout to load server node
-        },
-        oneditsave: function () {
-            //convert array for string if single mode
-            if (!$('#node-input-enableMultiple').is(':checked')) {
-                let device_id = $('#node-input-device_id').multipleSelect('getSelects', 'value');
-                this.device_id = device_id.length ? device_id[0] : null;
-            }
+            });
         }
-    });
+
+        deviceSelect.on('change', function() {
+            const selectedDevice = $(this).val();
+            loadAttributes(selectedDevice);
+        });
+
+        loadDeviceList();
+    }
+});
 </script>
+
 
