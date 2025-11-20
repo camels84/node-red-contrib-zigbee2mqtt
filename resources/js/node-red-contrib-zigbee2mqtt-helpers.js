@@ -1217,7 +1217,7 @@ class Zigbee2MqttEditor {
         const hasReadableExposes = exposes.some(expose => {
             // Verificar propriedade direta
             if ('property' in expose && 'access' in expose) {
-                const canPublish = that.hasPublishAccess(expose.access);
+                const canPublish = this.hasPublishAccess(expose.access);
                 if (canPublish) {
                     this.debug.log(`  ✅ [${expose.property}] access=${expose.access} → CAN PUBLISH`);
                     return true;
@@ -1230,7 +1230,7 @@ class Zigbee2MqttEditor {
             if ('features' in expose && Array.isArray(expose.features)) {
                 return expose.features.some(feature => {
                     if ('property' in feature && 'access' in feature) {
-                        const canPublish = that.hasPublishAccess(feature.access);
+                        const canPublish = this.hasPublishAccess(feature.access);
                         if (canPublish) {
                             this.debug.log(`  ✅ [${feature.property}] access=${feature.access} → CAN PUBLISH`);
                             return true;
@@ -1245,7 +1245,7 @@ class Zigbee2MqttEditor {
             return false;
         });
         
-        that.debug.log('[deviceHasReadableExposes] Device has readable exposes:', hasReadableExposes);
+        this.debug.log('[deviceHasReadableExposes] Device has readable exposes:', hasReadableExposes);
         return hasReadableExposes;
     }
 
@@ -1263,7 +1263,7 @@ class Zigbee2MqttEditor {
             if ('property' in expose && 'access' in expose) {
                 const canPublish = this.hasPublishAccess(expose.access);
                 if (canPublish) {
-                    that.debug.log(`  ✅ [${device.friendly_name}][${expose.property}] access=${expose.access} → CAN PUBLISH`);
+                    this.debug.log(`  ✅ [${device.friendly_name}][${expose.property}] access=${expose.access} → CAN PUBLISH`);
                     return true;
                 }
             }
@@ -1274,7 +1274,7 @@ class Zigbee2MqttEditor {
                     if ('property' in feature && 'access' in feature) {
                         const canPublish = this.hasPublishAccess(feature.access);
                         if (canPublish) {
-                            that.debug.log(`  ✅ [${device.friendly_name}][${feature.property}] access=${feature.access} → CAN PUBLISH`);
+                            this.debug.log(`  ✅ [${device.friendly_name}][${feature.property}] access=${feature.access} → CAN PUBLISH`);
                             return true;
                         }
                     }
