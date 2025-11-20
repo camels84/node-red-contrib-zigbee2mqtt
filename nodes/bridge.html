@@ -1,3 +1,12 @@
+<script type="text/javascript">
+// ✅ Usar Z2MDebug do contexto global (já carregado pelo api.html)
+(function(win) {
+    if (!win.Z2MDebug && win.parent && win.parent.Z2MDebug) {
+        win.Z2MDebug = win.parent.Z2MDebug;
+    }
+})(window);
+</script>
+
 <style>
     .node-input-devices-friendly_name, .node-input-groups-friendly_name {
         width:100% !important;
@@ -180,7 +189,13 @@
         },
         oneditprepare: function () {
             var node = this;
-
+              // ✅ Criar debugger para o Bridge
+            var debug = Z2MDebug.create('Z2M Bridge');
+            
+            if (Z2MDebug.isEnabled()) {
+                debug.log('🐛 Initializing bridge node');
+            }
+            
             node.tabs = RED.tabs.create({
                 id: "node-z2m-tabs",
                 onchange: function (tab) {
@@ -205,20 +220,48 @@
                 label: RED._("node-red-contrib-zigbee2mqtt/bridge:tabs.map")
             });
 
+
             $('#refreshBtn').on("click", function(){
                 init();
             });
 
-            init();
+            // âœ… Monitorar mudanÃ§as no servidor APENAS para refresh visual
+            $('#node-input-server').on('change', function() {
+                var serverId = $(this).val();
+                // âœ… Filtrar valores invÃ¡lidos
+                if (serverId && serverId !== '_ADD_' && serverId !== '') {
+                    debug.log('Server selection changed, refreshing display');
+                    init();  // Apenas atualiza a visualizaÃ§Ã£o
+                } else {
+                    debug.log('Invalid or empty server, hiding config');
+                    $('#config_wr').hide();
+                }
+            });
 
-
+            // âœ… SÃ³ inicializar se jÃ¡ existir um servidor configurado E vÃ¡lido
+            if (node.server && node.server !== '_ADD_' && node.server !== '') {
+                debug.log('Initializing with existing server:', node.server);
+                init();
+            } else {
+                debug.log('No valid server configured yet - waiting for selection');
+                $('#config_wr').hide();
+            }
 
             function init () {
+                var currentServer = $('#node-input-server').val();    
+        
+                if (!currentServer || currentServer === '_ADD_' || currentServer === '') {
+                    debug.warn('No valid server selected');
+                    $('#config_wr').hide();
+                    return;
+                }
+                debug.log('init() using server from field:', currentServer);
+
                 var $permitJoinBtn = $('#permit_join_btn');
 
                 //get config
                 $.getJSON('zigbee2mqtt/getConfig', {
-                    controllerID: node.server,
+                    controllerID: currentServer,  // âœ… Usar o valor do campo
                     permit_join: true
                 }).done(function (data, textStatus, jqXHR) {
                     if (data) {
@@ -238,7 +281,6 @@
                                 RED._("node-red-contrib-zigbee2mqtt/bridge:label.should_be_json") + '</b>'
                                 : '<b style="color:green;">' + RED._("node-red-contrib-zigbee2mqtt/bridge:label.ok") +
                                 '</b>');
-                        // $('#config_last_seen').html(data.config.advanced.last_seen!=='disabled'?'<b style="color:green;">'+RED._("node-red-contrib-zigbee2mqtt/bridge:label.ok")+'</b> ' + data.config.advanced.last_seen:'<b>'+RED._("node-red-contrib-zigbee2mqtt/bridge:label.disabled")+'</b>');
                         $('#config_availability')
                             .html(data.availability !== false ? '<b style="color:green;">' +
                                 RED._("node-red-contrib-zigbee2mqtt/bridge:label.ok") + '</b>' : '<b>' +
@@ -270,7 +312,6 @@
                         } else {
                             $permitJoinBtn.show();
                         }
-                        $('.log_level_btn#log_level_' + data.log_level + '_btn').addClass('active');
                     }
                 });
 
@@ -278,7 +319,7 @@
                 $('#restart_btn').off('click').on('click', function () {
                     if (confirm(RED._("node-red-contrib-zigbee2mqtt/bridge:label.sure_restart"))) {
                         $.getJSON('zigbee2mqtt/restart', {
-                            controllerID: node.server
+                            controllerID: currentServer  // âœ… Usar currentServer
                         });
                     }
                 });
@@ -291,7 +332,7 @@
                     $(this).addClass('active');
 
                     $.getJSON('zigbee2mqtt/setLogLevel', {
-                        controllerID: node.server,
+                        controllerID: currentServer,  // âœ… Usar currentServer
                         log_level: $(this).data('level')
                     }).done(function (data, textStatus, jqXHR) {
                     });
@@ -303,7 +344,7 @@
                     $permitJoinBtn.show();
                     $('#permit_join_cancel_btn').hide();
                     $.getJSON('zigbee2mqtt/setPermitJoin', {
-                        controllerID: node.server,
+                        controllerID: currentServer,  // âœ… Usar currentServer
                         permit_join: false
                     });
                 });
@@ -313,14 +354,14 @@
                     $permitJoinBtn.hide();
                     $('#permit_join_cancel_btn').show();
                     $.getJSON('zigbee2mqtt/setPermitJoin', {
-                        controllerID: node.server,
+                        controllerID: currentServer,  // âœ… Usar currentServer
                         permit_join: true
                     }).done(function (data, textStatus, jqXHR) {
                         timeout = setTimeout(function () {
                             $permitJoinBtn.show();
                             $('#permit_join_cancel_btn').hide();
                             $.getJSON('zigbee2mqtt/setPermitJoin', {
-                                controllerID: node.server,
+                                controllerID: currentServer,  // âœ… Usar currentServer
                                 permit_join: false
                             });
                         }, 60000 * 3);
@@ -334,7 +375,7 @@
                     $btn.find('span').text(RED._("node-red-contrib-zigbee2mqtt/bridge:map.loading"));
                     $('#z2m_map_fullscreen_btn').hide();
                     $.getJSON('zigbee2mqtt/refreshMap', {
-                        controllerID: node.server,
+                        controllerID: currentServer,  // âœ… Usar currentServer
                         engine: $('#node-input-engine').val()
                     }).done(function (data, textStatus, jqXHR) {
                         $btn.find('.fa-refresh').removeClass('fa-spin');
@@ -343,62 +384,87 @@
                         $('#z2m_map_img').html(data.svg).find('svg').attr('width','100%').attr('height','100%');
                     });
                 });
+                
                 $('#z2m_map_fullscreen_btn').off('click').on('click', function () {
-                    var url = '/zigbee2mqtt/showMap?controllerID='+node.server;
+                    var url = '/zigbee2mqtt/showMap?controllerID=' + currentServer;  // âœ… Usar currentServer
 
                     var win = window.open(url, '_blank');
                     if (win) {
-                        //Browser has allowed it to be opened
                         win.focus();
                     } else {
-                        //Browser has blocked it
                         alert('Please allow popups for this website');
                     }
                 });
 
                 $.getJSON('zigbee2mqtt/getDevices', {
-                    controllerID: node.server
+                    controllerID: currentServer  // âœ… Usar currentServer
                 }).done(function (data, textStatus, jqXHR) {
 
                     var tokeninputArr = [];
                     var tokeninputArrPrePopulate = [];
-                    var devices = data[0]; //devices
-                    var devicesById = {}; //devices
-                    if (devices) {
+                    
+                    // âœ… FIX 1: Validar se data Ã© array e tem devices
+                    if (!Array.isArray(data) || !data[0]) {
+                        debug.warn('Invalid devices data format');
+                        return;
+                    }
+                    
+                    var devices = data[0];
+                    var devicesById = {};
+                    
+                    // âœ… FIX 2: Validar se devices Ã© array
+                    if (devices && Array.isArray(devices)) {
                         $('#node-z2m-devices_table tbody tr').remove();
+
                         devices.forEach(function (device, index) {
-                          if ("Coordinator" === device.type) return;
+                          // âœ… FIX 3: Skip APENAS o Coordinator
+                          if ("Coordinator" === device.type) {
+                              debug.warn('Skipping Coordinator');
+                              return;
+                          }
 
                           devicesById[device.ieee_address+''] = device;
 
-                          tokeninputArr.push({'id':device.ieee_address, 'name':device.friendly_name, 'model': device.definition.model});
+                          // âœ… Obter model com fallback
+                          var model = 'Unknown';
+                          if (device.definition && device.definition.model) {
+                              model = device.definition.model;
+                          } else {
+                              debug.warn('Device without model:', device.friendly_name);
+                          }
+
+                          tokeninputArr.push({'id':device.ieee_address, 'name':device.friendly_name, 'model': model});
                           var input = '<input class="node-input-devices-friendly_name" type="text" value="' + device.friendly_name + '">';
-                          var info = '<div class="device_wr"><span><b>' + device.ieee_address + '</b>: ' + device.definition.model + '</span></div>';
+                          var info = '<div class="device_wr"><span><b>' + device.ieee_address + '</b>: ' + model + '</span></div>';
+
+                        
                           var removeBtn = '<a href="#" class="red-ui-item-remove red-ui-button" data-id="' + device.ieee_address + '"><i class="fa fa-remove"></i></a>'
                           var saveBtn = '<a href="#" class="red-ui-item-save red-ui-button" data-ieee_address="' + device.ieee_address + '"><i class="fa fa-check"></i>&nbsp;' + RED._("node-red-contrib-zigbee2mqtt/bridge:devices.set") + '</a>'
 
-                          $('#node-z2m-devices_table tbody').append('<tr><td>' + input + '</td><td>' + info + '</td><td>' + saveBtn + '</td><td>' + removeBtn + '</td><</tr>');
+                          $('#node-z2m-devices_table tbody').append('<tr><td>' + input + '</td><td>' + info + '</td><td>' + saveBtn + '</td><td>' + removeBtn + '</td></tr>');
                         });
 
+                        // âœ… Event handlers dentro do IF
                         $('#node-z2m-devices_table .red-ui-item-save').on('click', function () {
                             var ieee_address = $(this).attr('data-ieee_address');
                             var newName = $(this).closest('tr').find('.node-input-devices-friendly_name').val();
 
                             $.getJSON('zigbee2mqtt/renameDevice', {
-                                controllerID: node.server,
+                                controllerID: currentServer,  // âœ… Usar currentServer
                                 ieee_address: ieee_address,
                                 newName: newName
                             }).done(function (data, textStatus, jqXHR) {
                                 if ("error" in data) alert(data.description);
                             });
                         });
+                        
                         $('#node-z2m-devices_table .red-ui-item-remove').on('click', function () {
                             if (confirm(RED._("node-red-contrib-zigbee2mqtt/bridge:devices.sure_remove"))) {
                                 var id = $(this).attr('data-id');
                                 $(this).closest('tr').remove();
 
                                 $.getJSON('zigbee2mqtt/removeDevice', {
-                                    controllerID: node.server,
+                                    controllerID: currentServer,  // âœ… Usar currentServer
                                     id: id
                                 }).done(function (data, textStatus, jqXHR) {
                                     if ("error" in data) alert(data.description);
@@ -407,19 +473,18 @@
                         });
                     }
 
-                    var groups = data[1]; //groups
-                    if (groups) {
+                    var groups = data[1];
+                    // âœ… FIX 4: Validar se groups Ã© array
+                    if (groups && Array.isArray(groups)) {
                         $('#node-z2m-groups_table tbody tr').remove();
                         groups.forEach(function (group, index) {
                             var input = '<input class="node-input-groups-friendly_name" type="text" value="' + group.friendly_name + '">';
-
-                            // var info = '<div class="device_wr"><span><b>'+device.ieee_address+'</b>: '+device.modelID+'</span><div class="help-tips">'+device.description+'</div></div>';
                             var removeBtn = '<a href="#" class="red-ui-item-remove red-ui-button" data-id="' + group.id + '"><i class="fa fa-remove"></i></a>'
                             var saveBtn = '<a href="#" class="red-ui-item-save red-ui-button" data-id="' + group.id + '"><i class="fa fa-check"></i>&nbsp;' + RED._("node-red-contrib-zigbee2mqtt/bridge:groups.set") + '</a>'
 
                             $('#node-z2m-groups_table tbody').append('<tr class="group_row_' + group.id + '"><td>' + input + '</td><td>' + saveBtn + '</td><td>' + removeBtn + '</td></tr><tr class="group_row_' + group.id + '"><td colspan="4" style="padding-bottom:25px;"><input type="hidden" data-group_id="' + group.id + '" id="tokeninput_'+group.id+'" class="tokeninput"/></td></tr>');
 
-                            tokeninputArrPrePopulate  = [];
+                            tokeninputArrPrePopulate = [];
 
                             group.members.forEach(function (value) {
                                 if (value) {
@@ -430,6 +495,7 @@
                                   });
                                 }
                             });
+                            
                             $("#tokeninput_"+group.id).tokenInput(tokeninputArr, {
                                 theme:'facebook',
                                 prePopulate:tokeninputArrPrePopulate,
@@ -447,7 +513,7 @@
                                     var deviceId = item.id;
 
                                     $.getJSON('zigbee2mqtt/addDeviceToGroup', {
-                                        controllerID: node.server,
+                                        controllerID: currentServer,  // âœ… Usar currentServer
                                         groupId: groupId,
                                         deviceId: deviceId,
                                     }).done(function (data, textStatus, jqXHR) {
@@ -459,7 +525,7 @@
                                     var deviceId = item.id;
 
                                     $.getJSON('zigbee2mqtt/removeDeviceFromGroup', {
-                                        controllerID: node.server,
+                                        controllerID: currentServer,  // âœ… Usar currentServer
                                         groupId: groupId,
                                         deviceId: deviceId,
                                     }).done(function (data, textStatus, jqXHR) {
@@ -469,37 +535,38 @@
                             });
                         });
 
-
                         $('#node-z2m-groups_table .red-ui-item-save').on('click', function () {
                             var id = $(this).attr('data-id');
                             var newName = $(this).closest('tr').find('.node-input-groups-friendly_name').val();
 
                             $.getJSON('zigbee2mqtt/renameGroup', {
-                                controllerID: node.server,
+                                controllerID: currentServer,  // âœ… Usar currentServer
                                 id: id,
                                 newName: newName
                             }).done(function (data, textStatus, jqXHR) {
                                 if ("error" in data) alert(data.description);
                             });
                         });
+                        
                         $('#node-z2m-groups_table .red-ui-item-remove').on('click', function () {
                             if (confirm(RED._("node-red-contrib-zigbee2mqtt/bridge:groups.sure_remove"))) {
                                 var id = $(this).attr('data-id');
                                 $('.group_row_' + id).remove();
 
                                 $.getJSON('zigbee2mqtt/removeGroup', {
-                                    controllerID: node.server,
+                                    controllerID: currentServer,  // âœ… Usar currentServer
                                     id: id
                                 }).done(function (data, textStatus, jqXHR) {
                                     if ("error" in data) alert(data.description);
                                 });
                             }
                         });
+                        
                         $('#node-z2m-tab-groups .red-ui-item-add').on('click', function () {
                             var name = prompt(RED._("node-red-contrib-zigbee2mqtt/bridge:groups.enter_group_name"), "");
                             if (name) {
                                 $.getJSON('zigbee2mqtt/addGroup', {
-                                    controllerID: node.server,
+                                    controllerID: currentServer,  // âœ… Usar currentServer
                                     name: name
                                 }).done(function (data, textStatus, jqXHR) {
                                     if ("error" in data) alert(data.description);
@@ -510,14 +577,11 @@
                             }
                         });
                     }
-
                 });
-            }
-
-        },
+             }  // âœ… Fecha a funÃ§Ã£o init()
+        },  // âœ… VÃRGULA para separar os mÃ©todos
         oneditsave: function () {
 
         }
     });
 </script>
-
