@@ -3,7 +3,16 @@ var mqtt = require('mqtt');
 var Viz = require('viz.js');
 var {Module, render} = require('viz.js/full.render.js');
 
+
 module.exports = function(RED) {
+    "use strict";
+    
+    const path = require('path');
+    // ✅ REGISTAR O SCRIPT DEBUG GLOBALMENTE
+    RED.httpAdmin.get('/zigbee2mqtt/js/debug.js', function(req, res) {
+        res.sendFile(path.join(__dirname, '../resources/js/debug.js'));
+    });
+    
     class ServerNode {
         constructor(n) {
             RED.nodes.createNode(this, n);
