@@ -5,357 +5,200 @@ module.exports = function(RED) {
         constructor(config) {
             RED.nodes.createNode(this, config);
 
-            var node = this;
-            node.config = config;
-            node.cleanTimer = null;
-            node.server = RED.nodes.getNode(node.config.server);
 
-            if (node.server) {
-                node.status({}); //clean
-
-                node.on('input', function(message) {
-                    clearTimeout(node.cleanTimer);
-
-                    let key = node.config.device_id;
-                    if ((!key || key === 'msg.topic') && message.topic) {
-                        key = message.topic;
-                    }
-                    let device = node.server.getDeviceOrGroupByKey(key);
-                    if (device) {
-                        let payload;
-                        let options = {};
-                        switch (node.config.payloadType) {
-                            case '':
-                            case null:
-                            case 'nothing':
-                                payload = null;
-                                break;
-
-                            case 'flow':
-                            case 'global': {
-                                RED.util.evaluateNodeProperty(node.config.payload, node.config.payloadType, this, message, function (error, result) {
-                                    if (error) {
-                                        node.error(error, message);
-                                    } else {
-                                        payload = result;
-                                    }
-                                });
-                                break;
-                            }
-                            case 'z2m_payload':
-                                payload = node.config.payload;
-                                break;
-
-                            case 'num': {
-                                payload = parseInt(node.config.payload);
-                                break;
-                            }
-
-                            case 'str': {
-                                payload = node.config.payload;
-                                break;
-                            }
-
-                            case 'json': {
-                                if (Zigbee2mqttHelper.isJson(node.config.payload)) {
-                                    payload = JSON.parse(node.config.payload);
-                                } else {
-                                    node.warn('Incorrect payload. Waiting for valid JSON');
-                                    node.status({
-                                        fill: "red",
-                                        shape: "dot",
-                                        text: "node-red-contrib-zigbee2mqtt/out:status.no_payload"
-                                    });
-                                    node.cleanTimer = setTimeout(function(){
-                                        node.status({}); //clean
-                                    }, 3000);
-                                }
-                                break;
-                            }
-
-                            // case 'homekit':
-                            //     payload = node.formatHomeKit(message, payload);
-                            //     break;
-
-                            case 'msg':
-                            default: {
-                                payload = message[node.config.payload];
-                                break;
-                            }
-                        }
-
-
-                        var command;
-                        switch (node.config.commandType) {
-                            case '':
-                            case null:
-                            case 'nothing':
-                                payload = null;
-                                break;
-
-                            case 'msg': {
-                                command = message[node.config.command];
-                                break;
-                            }
-                            case 'z2m_cmd':
-                                command = node.config.command;
-                                switch (command) {
-                                    case 'state':
-                                        if (payload === 'toggle') {
-                                            if (device.current_values && 'position' in device.current_values) {
-                                                payload = device.current_values.position > 0 ? 'close' : 'open';
-                                            }
-                                        }
-                                        break;
-                                    case 'brightness':
-                                        payload = parseInt(payload);
-                                        options["state"] = payload>0?"on":"Off";
-                                        break;
-
-                                    case 'position':
-                                        payload = parseInt(payload);
-                                        break;
-                                    
-                                    case 'scene':
-                                        command = 'scene_recall';
-                                        payload = parseInt(payload);
-                                        break;
-
-                                    case 'lock':
-                                        command = 'state';
-                                        if (payload === 'toggle') {
-                                            if (device.current_values && 'lock_state' in
-                                                device.current_values && device.current_values.lock_state === 'locked') {
-                                                payload = 'unlock';
-                                            } else {
-                                                payload = 'lock';
-                                            }
-                                        } else if (payload === 'lock' || payload == 1 || payload === true || payload === 'on') {
-                                            payload = 'lock';
-                                        } else if (payload === 'unlock' || payload == 0 || payload === false || payload === 'off') {
-                                            payload = 'unlock';
-                                        }
-                                        break;
-
-                                    case 'color':
-                                        payload =  {"color":payload};
-                                        break;
-                                    case 'color_rgb':
-                                        payload =  {"color":{"rgb": payload}};
-                                        break;
-                                    case 'color_hex':
-                                        command = "color";
-                                        payload =  {"color":{"hex": payload}};
-                                        break;
-                                    case 'color_hsb':
-                                        command = "color";
-                                        payload =  {"color":{"hsb": payload}};
-                                        break;
-                                    case 'color_hsv':
-                                        command = "color";
-                                        payload =  {"color":{"hsv": payload}};
-                                        break;
-                                    case 'color_hue':
-                                        command = "color";
-                                        payload =  {"color":{"hue": payload}};
-                                        break;
-                                    case 'color_saturation':
-                                        command = "color";
-                                        payload =  {"color":{"saturation": payload}};
-                                        break;
-
-                                    case 'color_temp':
-
-                                        break;
-
-                                    case 'brightness_move':
-                                    case 'brightness_step':
-                                    case 'alert':
-                                    default: {
-                                        break;
-                                    }
-                                }
-                                break;
-
-                            case 'homekit':
-                                payload = node.fromHomeKitFormat(message, device);
-                                break;
-
-                            case 'json':
-                                break;
-
-                            case 'str':
-                            default: {
-                                command = node.config.command;
-                                break;
-                            }
-                        }
-
-                        let optionsToSend = {};
-                        switch (node.config.optionsType) {
-                            case '':
-                            case null:
-                            case 'nothing':
-                                break;
-
-                            case 'msg':
-                                if (node.config.optionsValue in message && typeof(message[node.config.optionsValue]) == 'object') {
-                                    optionsToSend = message[node.config.optionsValue];
-                                } else {
-                                    node.warn('Options value has invalid format');
-                                }
-                                break;
-
-                            case 'json':
-                                if (Zigbee2mqttHelper.isJson(node.config.optionsValue)) {
-                                    optionsToSend = JSON.parse(node.config.optionsValue);
-                                } else {
-                                    node.warn('Options value is not valid JSON, ignore: '+node.config.optionsValue);
-                                }
-                                break;
-
-                            default:
-                                optionsToSend[node.config.optionsType] = node.config.optionsValue;
-                                break;
-                        }
-
-                        //apply options
-                        if (Object.keys(optionsToSend).length) {
-                            node.server.setDeviceOptions(device.friendly_name, optionsToSend);
-                        }
-
-                        //empty payload, stop
-                        if (payload === null) {
-                            return false;
-                        }
-
-                        if (payload !== undefined) {
-                            var toSend = {};
-                            var text = '';
-                            if (typeof(payload) == 'object') {
-                                toSend = payload;
-                                text = 'json';
-                            } else {
-                                toSend[command] = payload;
-                                text = command+': '+payload;
-                            }
-
-                            node.log('Published to mqtt topic: ' + node.server.getTopic('/'+device.friendly_name + '/set') + ' : ' + JSON.stringify(toSend));
-                            node.server.mqtt.publish(node.server.getTopic('/'+device.friendly_name + '/set'), JSON.stringify(toSend),
-                                {'qos':parseInt(node.server.config.mqtt_qos||0)},
-                                function(err) {
-                                    if (err) {
-                                        node.error(err);
-                                    }
-                            });
-
-                            let fill = node.server.getDeviceAvailabilityColor(node.server.getTopic('/'+device.friendly_name));
-                            node.status({
-                                fill: fill,
-                                shape: "dot",
-                                text: text
-                            });
-                            let time = Zigbee2mqttHelper.statusUpdatedAt();
-                            node.cleanTimer = setTimeout(function(){
-                                node.status({
-                                    fill: fill,
-                                    shape: "ring",
-                                    text: text + ' ' + time
-                                });
-                            }, 3000);
-                        } else {
-                            node.status({
-                                fill: "red",
-                                shape: "dot",
-                                text: "node-red-contrib-zigbee2mqtt/out:status.no_payload"
-                            });
-                        }
-                    } else {
-                        node.status({
-                            fill: "red",
-                            shape: "dot",
-                            text: "node-red-contrib-zigbee2mqtt/out:status.no_device"
-                        });
-                    }
-                });
-
-            } else {
+            let node = this;            // Guarda a referência do nó para usar dentro de callbacks (✅ útil).
+            node.config = config;       // Guarda a configuração do nó. Isto já era feito na versão original.             
+            node.cleanTimer = null;     // Timer para limpar o status. No out.js, este é realmente usado (ex: depois do publish) ✅
+            
+            node.status({});            // Inicializa o status do nó (limpa). ✅ útil e seguro.
+            node.server = RED.nodes.getNode(node.config.server);    //Obtém o nó do servidor Zigbee2MQTT. Igual ao original ✅
+            
+            if (!node.server) {
                 node.status({
                     fill: "red",
                     shape: "dot",
                     text: "node-red-contrib-zigbee2mqtt/out:status.no_server"
                 });
+                return;
+            }
+            
+// ─── Listeners MQTT ─────────────────────────────
+            node.listener_onMQTTMessage = data => node.onMQTTMessage(data);
+            node.server.on('onMQTTMessage', node.listener_onMQTTMessage);
+
+            node.listener_onMQTTAvailability = data => node.onMQTTAvailability(data);
+            node.server.on('onMQTTAvailability', node.listener_onMQTTAvailability);
+
+            node.listener_onMQTTBridgeState = data => node.onMQTTBridgeState(data);
+            node.server.on('onMQTTBridgeState', node.listener_onMQTTBridgeState);
+
+            node.listener_onConnectError = () => node.onConnectError();
+            node.server.on('onConnectError', node.listener_onConnectError);
+
+            node.on('close', () => node.onClose());
+
+            // ─── Input handler ──────────────────────────────
+            node.on('input', message => {
+                clearTimeout(node.cleanTimer);
+
+                let key = node.config.device_id;
+                if ((!key || key === 'msg.topic') && message.topic) key = message.topic;
+
+                let device = node.server.getDeviceOrGroupByKey(key);
+                if (!device) {
+                    node.status({ fill: "red", shape: "dot", text: "no_device" });
+                    return;
+                }
+
+                let payload = node.getPayload(message, device);
+                let command = node.getCommand(message, payload, device);
+                let options = node.getOptions(message);
+
+                if (payload === null) return;
+
+                let toSend = (typeof payload === "object") ? payload : { [command]: payload };
+
+                // Aplica options adicionais
+                if (Object.keys(options).length) node.server.setDeviceOptions(device.friendly_name, options);
+
+                // Publica MQTT
+                node.server.mqtt.publish(
+                    node.server.getTopic(`/${device.friendly_name}/set`),
+                    JSON.stringify(toSend),
+                    { qos: parseInt(node.server.config.mqtt_qos || 0) },
+                    err => { if (err) node.error(err); }
+                );
+
+                // Atualiza status visual
+                let fill = node.server.getDeviceAvailabilityColor(node.server.getTopic(`/${device.friendly_name}`));
+                let text = (typeof payload === "object") ? 'json' : `${command}: ${payload}`;
+                node.setSuccessfulStatus({ fill, shape: "dot", text });
+
+                // ─── Atualiza dropdown dinamicamente ─────────────
+                if (device.current_values) {
+                    node.server.nodeSend(node, {
+                        changed: {
+                            item: {
+                                id: device.ieee_address || device.friendly_name,
+                                values: device.current_values
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        // ─── Funções auxiliares ─────────────────────────────
+        getPayload(message, device) {
+            let node = this;
+            let payload;
+            switch (node.config.payloadType) {
+                case 'nothing': case '': case null: payload = null; break;
+                case 'flow': case 'global':
+                    RED.util.evaluateNodeProperty(node.config.payload, node.config.payloadType, node, message, (err, result) => {
+                        payload = err ? null : result;
+                    });
+                    break;
+                case 'z2m_payload': payload = node.config.payload; break;
+                case 'num': payload = parseInt(node.config.payload); break;
+                case 'str': payload = node.config.payload; break;
+                case 'msg': default: payload = message[node.config.payload]; break;
+            }
+            return payload;
+        }
+
+        getCommand(message, payload, device) {
+            let node = this;
+            let command = node.config.command;
+
+            if (node.config.commandType === 'msg') command = message[node.config.command];
+            else if (node.config.commandType === 'z2m_cmd') {
+                switch (command) {
+                    case 'state':
+                        if (payload === 'toggle' && device.current_values && 'position' in device.current_values)
+                            payload = device.current_values.position > 0 ? 'close' : 'open';
+                        break;
+                    case 'brightness': payload = parseInt(payload); break;
+                    case 'position': payload = parseInt(payload); break;
+                    case 'lock':
+                        if (payload === 'toggle') payload = device.current_values.lock_state === 'locked' ? 'unlock' : 'lock';
+                        break;
+                    case 'color': payload = { color: payload }; break;
+                    default: break;
+                }
+            }
+            return command;
+        }
+
+        getOptions(message) {
+            let node = this;
+            let optionsToSend = {};
+            switch (node.config.optionsType) {
+                case 'msg':
+                    if (node.config.optionsValue in message && typeof message[node.config.optionsValue] === 'object')
+                        optionsToSend = message[node.config.optionsValue];
+                    break;
+                case 'json':
+                    if (Zigbee2mqttHelper.isJson(node.config.optionsValue))
+                        optionsToSend = JSON.parse(node.config.optionsValue);
+                    break;
+                default:
+                    if (node.config.optionsType) optionsToSend[node.config.optionsType] = node.config.optionsValue;
+            }
+            return optionsToSend;
+        }
+
+        // ─── Listeners MQTT ─────────────────────────────
+        onMQTTMessage(data) {
+            let node = this;
+            if (!data.item) return;
+
+            if (node.config.enableMultiple) {
+                if (("ieee_address" in data.item && node.config.device_id.includes(data.item.ieee_address))
+                    || ("id" in data.item && node.config.device_id.includes(data.item.id))) {
+                    node.server.nodeSend(node, { changed: data });
+                }
+            } else {
+                if (("ieee_address" in data.item && data.item.ieee_address === node.config.device_id)
+                    || ("id" in data.item && parseInt(data.item.id) === parseInt(node.config.device_id))) {
+                    node.server.nodeSend(node, { filter: node.config.filterChanges });
+                }
             }
         }
 
-        fromHomeKitFormat(message, device) {
-            if ("hap" in message && message.hap.context === undefined) {
-                return null;
-            }
+        onMQTTAvailability(data) { /* opcional, se quiser feedback */ }
 
-            var payload = message['payload'];
-            var msg = {};
+        onMQTTBridgeState(data) {
+            if (data && data.payload) {
+                if (this.last_successful_status && Object.keys(this.last_successful_status).length) {
+                    this.status(this.last_successful_status);
+                } else {
+                    this.status({ fill: "green", shape: "dot", text: "connected" });
+                }
+            } else {
+                this.onConnectError();
+            }
+        }
 
-            if (payload.On !== undefined) {
-                if ("current_values" in device) {
-                    // if ("brightness" in device.current_values) msg['brightness'] = device.current_values.brightness;
-                }
-                msg['state'] = payload.On?"on":"off";
-            }
-            if (payload.Brightness !== undefined) {
-                msg['brightness'] =  Zigbee2mqttHelper.convertRange(payload.Brightness, [0,100], [0,255]);
-                device.current_values.brightness = msg['brightness'];
-                if ("current_values" in device) {
-                    if ("current_values" in device) device.current_values.brightness = msg['brightness'];
-                }
-                if (payload.Brightness >= 254) payload.Brightness = 255;
-                msg['state'] = payload.Brightness > 0?"on":"off"
-            }
-            if (payload.Hue !== undefined) {
-                msg['color'] = {"hue":payload.Hue};
-                device.current_values.color.hue = payload.Hue;
-                if ("current_values" in device) {
-                    if ("brightness" in device.current_values) msg['brightness'] = device.current_values.brightness;
-                    if ("color" in device.current_values && "saturation" in device.current_values.color) msg['color']['saturation'] = device.current_values.color.saturation;
-                    if ("color" in device.current_values && "hue" in device.current_values.color) device.current_values.color.hue = payload.Hue;
-                }
-                msg['state'] = "on";
-            }
-            if (payload.Saturation !== undefined) {
-                msg['color'] = {"saturation":payload.Saturation};
-                device.current_values.color.saturation = payload.Saturation;
-                if ("current_values" in device) {
-                    if ("brightness" in device.current_values) msg['brightness'] = device.current_values.brightness;
-                    if ("color" in device.current_values && "hue" in device.current_values.color) msg['color']['hue'] = device.current_values.color.hue;
-                    if ("color" in device.current_values && "saturation" in device.current_values.color) msg['color']['saturation'] = payload.Saturation;
-                }
-                msg['state'] = "on";
-            }
-            if (payload.ColorTemperature !== undefined) {
-                msg['color_temp'] = Zigbee2mqttHelper.convertRange(payload.ColorTemperature, [150,500], [150,500]);
-                device.current_values.color_temp = msg['color_temp'];
-                if ("current_values" in device) {
-                    if ("color_temp" in device.current_values)  device.current_values.color_temp = msg['color_temp'];
-                }
-                msg['state'] = "on";
-            }
-            if (payload.LockTargetState !== undefined) {
-                msg['state'] = payload.LockTargetState?"LOCK":"UNLOCK";
-            }
-            if (payload.TargetPosition !== undefined) {
-                msg['position'] = payload.TargetPosition;
-            }
+        onConnectError() {
+            this.status({ fill: "red", shape: "dot", text: "node-red-contrib-zigbee2mqtt/out:status.no_connection" });
+        }
 
-            return msg;
+        onClose() {
+            let node = this;
+            if (node.listener_onMQTTAvailability) node.server.removeListener("onMQTTAvailability", node.listener_onMQTTAvailability);
+            if (node.listener_onConnectError) node.server.removeListener("onConnectError", node.listener_onConnectError);
+            if (node.listener_onMQTTMessage) node.server.removeListener("onMQTTMessage", node.listener_onMQTTMessage);
+            if (node.listener_onMQTTBridgeState) node.server.removeListener("onMQTTBridgeState", node.listener_onMQTTBridgeState);
+        }
+
+        setSuccessfulStatus(obj) {
+            this.status(obj);
+            this.last_successful_status = obj;
         }
     }
 
-
     RED.nodes.registerType('zigbee2mqtt-out', Zigbee2mqttNodeOut);
 };
-
-
-
-
 
 
