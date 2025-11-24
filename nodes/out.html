@@ -209,13 +209,13 @@
                     value: null
                 },
                 command: {
-                    value: ' ', //'state'
+                    value: ' ',
                 },
                 commandType: {
                     value: 'z2m_cmd',
                 },
                 payload: {
-                    value: ' ' , //payload',
+                    value: ' ',
                 },
                 payloadType: {
                     value: 'msg',
@@ -252,11 +252,8 @@
             oneditprepare: async function() {
                 let node = this;
             
-            // ✅ Criar debugger específico
+            // ✅ Criar debugger específico - SEM LOG AQUI
             var debug = Z2MDebug.create('Z2M Out');
-            if (Z2MDebug.isEnabled()) {
-                debug.log('Initializing Out node');
-            }               
     
             // Função para mostrar/esconder blocos de ajuda
                 function showHelpBlock() {
@@ -278,8 +275,6 @@
                     const $minLabel = $('#slider-min-label');
                     const $maxLabel = $('#slider-max-label');
                     
-                    debug.log('[setupSlider] Initializing slider and input');
-                    
                     // Função para formatar tempo
                     function formatTime(seconds) {
                         const hours = Math.floor(seconds / 3600);
@@ -300,13 +295,10 @@
                         const min = parseInt($slider.attr('min'));
                         
                         if (max > 1000) {
-                            // Ã‰ tempo (countdown)
                             $display.text(value + 's (' + formatTime(value) + ')');
                         } else if (min >= 150) {
-                            // Ã‰ temperatura de cor
                             $display.text(value + 'K');
                         } else {
-                            // Ã‰ valor numÃ©rico normal
                             $display.text(value);
                         }
                     }
@@ -317,9 +309,8 @@
                         if ($cmd.data('typedInput')) {
                             try {
                                 const cmd = $cmd.typedInput('value');
-                                debug.log('[adjustSlider] Command:', cmd);
                                 
-                                // Countdown: atÃ© 12 horas (43200s)
+                                // Countdown: até 12 horas (43200s)
                                 if (cmd && cmd.toLowerCase().includes('countdown')) {
                                     $slider.attr('min', 0);
                                     $slider.attr('max', 43200);
@@ -375,7 +366,7 @@
                                 updateDisplay(minVal);
                                 
                             } catch(e) {
-                                debug.log('[adjustSlider] Could not read command:', e);
+                                // Silenciar erro
                             }
                         }
                     }
@@ -383,7 +374,6 @@
                     // Listener do SLIDER - atualiza o input
                     $slider.on('input', function() {
                         const value = parseInt($(this).val());
-                        debug.log('[slider input] Value:', value);
                         $input.val(value);
                         updateDisplay(value);
                     });
@@ -396,7 +386,6 @@
                         
                         // Validar limites
                         const validValue = Math.max(min, Math.min(max, value));
-                        debug.log('[input change] Value:', validValue);
                         
                         $slider.val(validValue);
                         $(this).val(validValue);
@@ -405,38 +394,32 @@
                     
                     // Carregar valor inicial
                     const initialValue = node.manualPayloadValue || 0;
-                    debug.log('[setupSlider] Initial value:', initialValue);
                     $slider.val(initialValue);
                     $input.val(initialValue);
                     updateDisplay(initialValue);
                     
-                    // Ajustar slider quando comando muda
-                    // NOVO: Se o payload atual Ã© __manual__, mostrar o slider
+                    // Se o payload atual é __manual__, mostrar o slider
                     if (node.payload === '__manual__' || (node.manualPayloadValue && node.manualPayloadValue !== '0')) {
-                        debug.log('[setupSlider] Manual mode detected, showing slider row');
                         $('#manual-payload-row').show();
                     }
                     
                     return adjustSliderForCommand;
                 }
 
-                // Inicializar apÃ³s pequeno delay
+                // Inicializar após pequeno delay
                 setTimeout(() => {
                     // Criar editor com helper
                     let helper = new Zigbee2MqttEditor(node, { 
                         'allow_empty': true,
-                        'mode': 'out'  // â† âœ¨ ADICIONAR ESTA LINHA
+                        'mode': 'out'
                     });
                     
                     helper.build().then(() => {
-                        debug.log('[oneditprepare] Build complete');
-                        
                         // Setup slider DEPOIS do build
                         const adjustSliderForCommand = setupSlider();
                         
                         // Quando comando muda, ajustar slider
                         $('#node-input-command').on('change', function(event, type, value) {
-                            debug.log('[command change] Adjusting slider for new command');
                             setTimeout(() => {
                                 adjustSliderForCommand();
                             }, 100);
@@ -445,22 +428,15 @@
                         // Mostrar help block inicial
                         showHelpBlock();
                         
-                        // IMPORTANTE: O listener jÃ¡ foi criado no bind() da classe
-                        // Mas precisamos garantir que funciona tambÃ©m ao abrir o node
-                        // EntÃ£o vamos DISPARAR manualmente o evento change uma vez
-                        // para sincronizar o payload com o command atual
-                        debug.log('[oneditprepare] Triggering initial payload sync...');
+                        // Disparar evento inicial
                         setTimeout(() => {
                             const $cmd = $('#node-input-command');
                             if ($cmd.data('typedInput')) {
                                 const currentType = $cmd.typedInput('type');
                                 const currentValue = $cmd.typedInput('value');
-                                debug.log('[oneditprepare] Current command:', currentType, '/', currentValue);
-                                
-                                // Disparar evento para sincronizar payload
                                 $cmd.trigger('change', [currentType, currentValue]);
                             }
-                        }, 100); // Aguardar typedInput estar 100% pronto
+                        }, 100);
                     });
                 }, 100);
             },
@@ -470,7 +446,7 @@
             // PARTE 5: oneditsave - LER DO TYPEDINPUT
             // ============================================================================  
             oneditsave: function() {
-                // âœ¨ NOVA VALIDAÃ‡ÃƒO: Verificar se device tem comandos
+                // ✅ NOVA VALIDAÇÃO: Verificar se device tem comandos
                 const $cmd = $('#node-input-command');
                 let hasCommands = true;
                 
@@ -479,24 +455,21 @@
                         const cmdType = $cmd.typedInput('type');
                         const cmdValue = $cmd.typedInput('value');
                         
-                        // Se estÃ¡ configurado como "nothing" ou vazio, device nÃ£o tem comandos
                         if (cmdType === 'nothing' || !cmdValue || cmdValue === '') {
                             hasCommands = false;
                         }
                     } catch(e) {
-                        debug.warn('[oneditsave] Error checking commands:', e);
+                        // Silenciar erro
                     }
                 }
                 
-                // âœ¨ Se nÃ£o tem comandos, BLOQUEAR gravaÃ§Ã£o
+                // ✅ Se não tem comandos, BLOQUEAR gravação
                 if (!hasCommands) {
                     RED.notify(
                         RED._("node-red-contrib-zigbee2mqtt/server:editor.error_no_commands") || 
                         "This device has no output commands available. Please select a device with controllable features.",
                         "error"
                     );
-                    
-                    // Retornar false previne o salvamento
                     return false;
                 }
                 
@@ -528,7 +501,6 @@
                         }
                         this.command = cmdValue;
                     } catch(err) {
-                        debug.warn('[Z2M OUT] Error reading command:', err);
                         this.command = '';
                         this.commandType = 'z2m_cmd';
                     }
@@ -541,35 +513,21 @@
                         this.payloadType = $payload.typedInput('type');
                         let payloadValue = $payload.typedInput('value');
                         
-                        debug.log('[oneditsave] Payload type:', this.payloadType);
-                        debug.log('[oneditsave] Payload value:', payloadValue);
-                        
-                        // Se valor Ã© __manual__, manter __manual__ E guardar o valor manual
                         if (payloadValue === '__manual__') {
                             const manualValue = $('#node-input-manualPayloadValue').val();
-                            debug.log('[oneditsave] Manual mode - value from input:', manualValue);
-                            
-                            // IMPORTANTE: Manter __manual__ no payload para poder restaurar
                             this.payload = '__manual__';
                             this.payloadType = 'z2m_payload';
-                            
-                            // Guardar o valor manual separadamente
                             this.manualPayloadValue = manualValue || '0';
-                            
-                            debug.log('[oneditsave] Saved payload:', this.payload, 'manualValue:', this.manualPayloadValue);
                         } else {
                             this.payload = payloadValue;
-                            // Limpar manualPayloadValue se nÃ£o estÃ¡ em modo manual
                             this.manualPayloadValue = '';
                         }
                     } catch(err) {
-                        debug.warn('[Z2M OUT] Error reading payload:', err);
                         this.payload = 'payload';
                         this.payloadType = 'msg';
                         this.manualPayloadValue = '';
                     }
                 } else {
-                    // Se nÃ£o conseguiu ler, manter valores atuais ou usar defaults
                     if (!this.payload) {
                         this.payload = 'payload';
                         this.payloadType = 'msg';
@@ -577,34 +535,23 @@
                     }
                 }
 
-                // âœ¨ Options - forÃ§ar "nothing" se nÃ£o hÃ¡ comandos
+                // Options
                 const $options = $('#node-input-optionsValue');
                 if ($options.data('typedInput')) {
                     try {
                         if (!hasCommands) {
-                            // ForÃ§ar nothing
                             this.optionsType = 'nothing';
                             this.optionsValue = '';
-                            debug.log('[oneditsave] No commands - forcing options to nothing');
                         } else {
                             this.optionsType = $options.typedInput('type');
                             this.optionsValue = $options.typedInput('value');
                         }
                     } catch(err) {
-                        debug.warn('[Z2M OUT] Error reading options:', err);
                         this.optionsType = 'nothing';
                         this.optionsValue = '';
                     }
                 }
-
-                debug.log('[oneditsave] Final state:');
-                debug.log('  - payload:', this.payload);
-                debug.log('  - payloadType:', this.payloadType);
-                debug.log('  - manualPayloadValue:', this.manualPayloadValue);
-                debug.log('  - optionsType:', this.optionsType);
-                debug.log('  - optionsValue:', this.optionsValue);
                 
-                // âœ… Permitir salvamento
                 return true;
             }            
     });
