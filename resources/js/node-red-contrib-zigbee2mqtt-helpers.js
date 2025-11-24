@@ -613,6 +613,12 @@ class Zigbee2MqttEditor {
                         that.debug.log(`  [${i}] Adding option:`, JSON.stringify(option));
                         z2mPayloadOptions.push(option);
                     });
+                } else if ('type' in foundExpose && foundExpose.type === 'binary') {
+                    that.debug.log('✅ Found binary type - adding ON/OFF/TOGGLE');
+                    z2mPayloadOptions = [
+                        {'value': 'ON', 'label': 'On'},
+                        {'value': 'OFF', 'label': 'Off'},
+                    ];
                 } else if ('value_min' in foundExpose && 'value_max' in foundExpose) {
                     that.debug.log('✅ Found numeric range:', foundExpose.value_min, '-', foundExpose.value_max);
                     const min = foundExpose.value_min;
