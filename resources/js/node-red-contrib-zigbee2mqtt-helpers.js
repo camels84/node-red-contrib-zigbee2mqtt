@@ -614,11 +614,100 @@ class Zigbee2MqttEditor {
                         z2mPayloadOptions.push(option);
                     });
                 } else if ('type' in foundExpose && foundExpose.type === 'binary') {
-                    that.debug.log('✅ Found binary type - adding ON/OFF/TOGGLE');
-                    z2mPayloadOptions = [
-                        {'value': 'ON', 'label': 'On'},
-                        {'value': 'OFF', 'label': 'Off'},
+                    that.debug.log('✅ Found binary type');
+                    
+                    // ✅ Obter valores ON/OFF do expose
+                    const valueOn = foundExpose.value_on || 'ON';
+                    const valueOff = foundExpose.value_off || 'OFF';
+                    
+                    that.debug.log('   - value_on:', valueOn);
+                    that.debug.log('   - value_off:', valueOff);
+                    that.debug.log('   - property:', foundExpose.property);
+                    
+                    // ❌ ERRO: currentCommand já foi declarado antes! Usar outro nome
+                    const commandProperty = foundExpose.property || '';  // ✅ CORRIGIDO
+                    
+                    // ✅ REGEX: Padrões que SEMPRE suportam TOGGLE
+                    const toggleablePatterns = [
+                        /^state$/i,
+                        /^state_l\d+$/i,
+                        /^state_(left|right|center)$/i,
+                        /^window_detection$/i
                     ];
+                    
+                    // ✅ REGEX: Padrões que NUNCA têm TOGGLE
+                    const nonToggleablePatterns = [
+                        /^backlight/i,
+                        /^alarm/i,
+                        /^tamper/i,
+                        /^occupancy/i,
+                        /^presence/i,
+                        /^contact/i,
+                        /^water_leak/i,
+                        /^battery_low/i,
+                        /^ac_status/i,
+                        /^led_disabled/i,
+                        /^power_outage/i,
+                        /^child_lock/i,
+                        /^auto_/i,
+                        /^mode$/i
+                    ];
+                    
+                    // ✅ Decidir se inclui TOGGLE
+                    let includeToggle = false;
+                    
+                    // Verificar BLACKLIST primeiro (prioridade)
+                    const isNeverToggleable = nonToggleablePatterns.some(pattern => pattern.test(commandProperty));
+                    
+                    if (isNeverToggleable) {
+                        includeToggle = false;
+                        that.debug.log('   ❌ Matches NEVER pattern - no toggle');
+                    } else {
+                        // Verificar WHITELIST
+                        const isAlwaysToggleable = toggleablePatterns.some(pattern => pattern.test(commandProperty));
+                        
+                        if (isAlwaysToggleable) {
+                            includeToggle = true;
+                            that.debug.log('   ✅ Matches ALWAYS pattern - has toggle');
+                        } else if (valueOn.toUpperCase() === 'ON' && valueOff.toUpperCase() === 'OFF') {
+                            includeToggle = true;
+                            that.debug.log('   ✅ Uses standard ON/OFF - assuming toggle support');
+                        } else {
+                            includeToggle = false;
+                            that.debug.log('   ❌ Custom values - no toggle');
+                        }
+                    }
+                    
+                    // ✅ Construir opções com capitalização correta
+                    if (includeToggle) {
+                        z2mPayloadOptions = [
+                            {
+                                'value': valueOn, 
+                                'label': valueOn.charAt(0).toUpperCase() + valueOn.slice(1).toLowerCase()
+                            },
+                            {
+                                'value': valueOff, 
+                                'label': valueOff.charAt(0).toUpperCase() + valueOff.slice(1).toLowerCase()
+                            },
+                            {
+                                'value': 'TOGGLE', 
+                                'label': 'Toggle'
+                            }
+                        ];
+                        that.debug.log('   → Added 3 options (with TOGGLE)');
+                    } else {
+                        z2mPayloadOptions = [
+                            {
+                                'value': valueOn, 
+                                'label': valueOn.charAt(0).toUpperCase() + valueOn.slice(1).toLowerCase()
+                            },
+                            {
+                                'value': valueOff, 
+                                'label': valueOff.charAt(0).toUpperCase() + valueOff.slice(1).toLowerCase()
+                            }
+                        ];
+                        that.debug.log('   → Added 2 options (no TOGGLE)');
+                    }
                 } else if ('value_min' in foundExpose && 'value_max' in foundExpose) {
                     that.debug.log('✅ Found numeric range:', foundExpose.value_min, '-', foundExpose.value_max);
                     const min = foundExpose.value_min;
