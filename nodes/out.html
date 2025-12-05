@@ -491,43 +491,81 @@
                 const selectedOpt = $('#node-input-device_id option:selected').first();
                 this.friendly_name = selectedOpt.data('friendly_name') || null;
 
-                // Command - ler do typedInput
+                // ✅ Command - ler do typedInput
                 if ($cmd.data('typedInput')) {
                     try {
                         this.commandType = $cmd.typedInput('type');
                         let cmdValue = $cmd.typedInput('value');
+                        
+                        // ✅ Se é objeto, extrair o .value
                         if (cmdValue && typeof cmdValue === 'object' && cmdValue.value !== undefined) {
                             cmdValue = cmdValue.value;
                         }
-                        this.command = cmdValue;
+                        
+                        this.command = cmdValue || '';
+                        
+                        console.log('[OUT SAVE] Command saved:', this.commandType, '/', this.command);
                     } catch(err) {
+                        console.error('[OUT SAVE] Error reading command:', err);
                         this.command = '';
                         this.commandType = 'z2m_cmd';
                     }
+                } else {
+                    console.warn('[OUT SAVE] Command typedInput not initialized');
+                    this.command = '';
+                    this.commandType = 'z2m_cmd';
                 }
                 
-                // Payload - ler do typedInput
+                // ✅ Payload - ler do typedInput COM VALIDAÇÃO
                 const $payload = $('#node-input-payload');
                 if ($payload.data('typedInput')) {
                     try {
-                        this.payloadType = $payload.typedInput('type');
+                        const payloadType = $payload.typedInput('type');
                         let payloadValue = $payload.typedInput('value');
                         
+                        console.log('[OUT SAVE] Payload read from typedInput:', payloadType, '/', payloadValue);
+                        
+                        // ✅ Caso especial: Manual input
                         if (payloadValue === '__manual__') {
                             const manualValue = $('#node-input-manualPayloadValue').val();
                             this.payload = '__manual__';
                             this.payloadType = 'z2m_payload';
                             this.manualPayloadValue = manualValue || '0';
-                        } else {
+                            
+                            console.log('[OUT SAVE] Manual payload saved:', this.manualPayloadValue);
+                        } 
+                        // ✅ Tipos msg/flow/global - GARANTIR que tem valor
+                        else if (['msg', 'flow', 'global'].includes(payloadType)) {
+                            // Se não tem valor, usar 'payload' como padrão
+                            if (!payloadValue || payloadValue === '') {
+                                payloadValue = 'payload';
+                                console.log('[OUT SAVE] Empty value for', payloadType, '- using default "payload"');
+                            }
+                            
                             this.payload = payloadValue;
+                            this.payloadType = payloadType;
                             this.manualPayloadValue = '';
+                            
+                            console.log('[OUT SAVE] Payload saved:', this.payloadType, '/', this.payload);
+                        }
+                        // ✅ Outros tipos (z2m_payload, str, num, json)
+                        else {
+                            this.payload = payloadValue;
+                            this.payloadType = payloadType;
+                            this.manualPayloadValue = '';
+                            
+                            console.log('[OUT SAVE] Payload saved:', this.payloadType, '/', this.payload);
                         }
                     } catch(err) {
+                        console.error('[OUT SAVE] Error reading payload:', err);
+                        // ✅ Fallback seguro
                         this.payload = 'payload';
                         this.payloadType = 'msg';
                         this.manualPayloadValue = '';
                     }
                 } else {
+                    console.warn('[OUT SAVE] Payload typedInput not initialized');
+                    // ✅ Se não existe typedInput mas node tem valores, manter
                     if (!this.payload) {
                         this.payload = 'payload';
                         this.payloadType = 'msg';
@@ -535,7 +573,7 @@
                     }
                 }
 
-                // Options
+                // ✅ Options - ler do typedInput
                 const $options = $('#node-input-optionsValue');
                 if ($options.data('typedInput')) {
                     try {
@@ -546,13 +584,33 @@
                             this.optionsType = $options.typedInput('type');
                             this.optionsValue = $options.typedInput('value');
                         }
+                        
+                        console.log('[OUT SAVE] Options saved:', this.optionsType, '/', this.optionsValue);
                     } catch(err) {
+                        console.error('[OUT SAVE] Error reading options:', err);
                         this.optionsType = 'nothing';
                         this.optionsValue = '';
                     }
+                } else {
+                    console.warn('[OUT SAVE] Options typedInput not initialized');
+                    this.optionsType = 'nothing';
+                    this.optionsValue = '';
                 }
                 
+                // ✅ Log final para debug
+                console.log('═══════════════════════════════════════════════════════');
+                console.log('[OUT SAVE] FINAL VALUES:');
+                console.log('  - device_id:', this.device_id);
+                console.log('  - commandType:', this.commandType);
+                console.log('  - command:', this.command);
+                console.log('  - payloadType:', this.payloadType);
+                console.log('  - payload:', this.payload);
+                console.log('  - manualPayloadValue:', this.manualPayloadValue);
+                console.log('  - optionsType:', this.optionsType);
+                console.log('  - optionsValue:', this.optionsValue);
+                console.log('═══════════════════════════════════════════════════════');
+                
                 return true;
-            }            
+            }
     });
     </script>
