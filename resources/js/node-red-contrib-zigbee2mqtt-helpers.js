@@ -472,8 +472,8 @@ class Zigbee2MqttEditor {
             }, 50);
         });
     }
-
-    buildDevicePayloadInput() {
+  
+  buildDevicePayloadInput() {
         let that = this;
         if (!that.getDevicePayloadInput()) 
             return;
@@ -487,7 +487,7 @@ class Zigbee2MqttEditor {
         if (!hasCommands) {
             that.debug.log('[buildDevicePayloadInput] No commands - hiding payload row');
             that.getDevicePayloadInput().closest('.form-row').hide();
-            $('#manual-payload-row').hide(); // Esconder slider também
+            $('#manual-payload-row').hide();
             return;
         }
         that.getDevicePayloadInput().closest('.form-row').show();
@@ -506,7 +506,6 @@ class Zigbee2MqttEditor {
         try {
             const $cmd = that.getDeviceCommandInput();
             if ($cmd && $cmd.length) {
-                // Tentar LER diretamente, sem verificar .data('typedInput')
                 try {
                     currentCommandType = $cmd.typedInput('type');
                     currentCommand = $cmd.typedInput('value');
@@ -526,27 +525,25 @@ class Zigbee2MqttEditor {
                         const $commandList = that.getDeviceCommandListInput();
                         if ($commandList && $commandList.val()) {
                             currentCommand = $commandList.val();
-                            that.debug.log('⚠️  Empty value, reading from command-list:', currentCommand);
+                            that.debug.log('⚠️ Empty value, reading from command-list:', currentCommand);
                         }
                     }
                 } catch(innerErr) {
-                    that.debug.log('⚠️  Command typedInput exists but cannot read:', innerErr.message);
-                    // Fallback para node values
+                    that.debug.log('⚠️ Command typedInput exists but cannot read:', innerErr.message);
                     currentCommand = that.node.command || '';
                     currentCommandType = that.node.commandType || 'z2m_cmd';
                 }
             } else {
-                that.debug.log('⚠️  Command input element not found');
+                that.debug.log('⚠️ Command input element not found');
             }
         } catch(e) {
             that.debug.warn('❌ Error reading command from typedInput:', e);
         }
         
-        
         if (!currentCommand) {
             currentCommand = that.node.command || '';
             currentCommandType = that.node.commandType || 'z2m_cmd';
-            that.debug.log('⚠️  Command empty, using node values:', currentCommandType, '/', currentCommand);
+            that.debug.log('⚠️ Command empty, using node values:', currentCommandType, '/', currentCommand);
         }
 
         that.debug.log('🎯 FINAL command to use:', currentCommandType, '/', currentCommand);
@@ -616,7 +613,6 @@ class Zigbee2MqttEditor {
                 } else if ('type' in foundExpose && foundExpose.type === 'binary') {
                     that.debug.log('✅ Found binary type');
                     
-                    // ✅ Obter valores ON/OFF do expose
                     const valueOn = foundExpose.value_on || 'ON';
                     const valueOff = foundExpose.value_off || 'OFF';
                     
@@ -624,10 +620,8 @@ class Zigbee2MqttEditor {
                     that.debug.log('   - value_off:', valueOff);
                     that.debug.log('   - property:', foundExpose.property);
                     
-                    // ❌ ERRO: currentCommand já foi declarado antes! Usar outro nome
-                    const commandProperty = foundExpose.property || '';  // ✅ CORRIGIDO
+                    const commandProperty = foundExpose.property || '';
                     
-                    // ✅ REGEX: Padrões que SEMPRE suportam TOGGLE
                     const toggleablePatterns = [
                         /^state$/i,
                         /^state_l\d+$/i,
@@ -635,7 +629,6 @@ class Zigbee2MqttEditor {
                         /^window_detection$/i
                     ];
                     
-                    // ✅ REGEX: Padrões que NUNCA têm TOGGLE
                     const nonToggleablePatterns = [
                         /^backlight/i,
                         /^alarm/i,
@@ -653,17 +646,14 @@ class Zigbee2MqttEditor {
                         /^mode$/i
                     ];
                     
-                    // ✅ Decidir se inclui TOGGLE
                     let includeToggle = false;
                     
-                    // Verificar BLACKLIST primeiro (prioridade)
                     const isNeverToggleable = nonToggleablePatterns.some(pattern => pattern.test(commandProperty));
                     
                     if (isNeverToggleable) {
                         includeToggle = false;
                         that.debug.log('   ❌ Matches NEVER pattern - no toggle');
                     } else {
-                        // Verificar WHITELIST
                         const isAlwaysToggleable = toggleablePatterns.some(pattern => pattern.test(commandProperty));
                         
                         if (isAlwaysToggleable) {
@@ -678,7 +668,6 @@ class Zigbee2MqttEditor {
                         }
                     }
                     
-                    // ✅ Construir opções com capitalização correta
                     if (includeToggle) {
                         z2mPayloadOptions = [
                             {
@@ -731,14 +720,12 @@ class Zigbee2MqttEditor {
         if (currentCommandType === 'z2m_cmd' && z2mPayloadOptions.length === 0 && currentCommand) {
             that.debug.log('🔄 Using FALLBACK options for command:', currentCommand);
             
-            // Opções padrão para state
             const stateOptions = [
                 {'value': 'ON', 'label': 'On'},
                 {'value': 'OFF', 'label': 'Off'},
                 {'value': 'TOGGLE', 'label': 'Toggle'}
             ];
             
-            // Base de fallback options estáticas
             const fallbackOptions = {
                 'state': stateOptions,
                 'brightness': [
@@ -754,32 +741,27 @@ class Zigbee2MqttEditor {
                 ]
             };
             
-            // Detectar canais disponíveis dinamicamente (state_l1, state_l2, etc.)
             if (device && 'definition' in device && device.definition && 'exposes' in device.definition) {
                 const flatten = arr => arr.flatMap(e => e.features ? flatten(e.features) : [e]);
                 const exposes = flatten(device.definition.exposes);
                 
-                // Procurar por properties que começam com 'state_l'
                 const stateChannels = exposes
                     .filter(e => e.property && e.property.match(/^state_l\d+$/))
                     .map(e => e.property);
                 
                 if (stateChannels.length > 0) {
                     that.debug.log('  🔍 Found', stateChannels.length, 'state channels:', stateChannels);
-                    // Adicionar fallback para cada canal encontrado
                     stateChannels.forEach(channel => {
                         fallbackOptions[channel] = stateOptions;
                     });
                 }
                 
-                // Procurar por properties que começam com 'inching_control_'
                 const inchingChannels = exposes
                     .filter(e => e.property && e.property.match(/^inching_control_\d+$/))
                     .map(e => e.property);
                 
                 if (inchingChannels.length > 0) {
                     that.debug.log('  🔍 Found', inchingChannels.length, 'inching control channels:', inchingChannels);
-                    // Adicionar fallback para cada canal encontrado
                     inchingChannels.forEach(channel => {
                         fallbackOptions[channel] = [
                             {'value': 'true', 'label': 'Enable (true)'},
@@ -789,7 +771,6 @@ class Zigbee2MqttEditor {
                 }
             }
             
-            // Aplicar fallback
             if (currentCommand.toLowerCase().includes('lock')) {
                 z2mPayloadOptions = [
                     {'value': 'LOCK', 'label': 'Lock'},
@@ -801,18 +782,16 @@ class Zigbee2MqttEditor {
             }
         }
         
-        
         that.debug.log('📊 Total payload options:', z2mPayloadOptions.length);
 
         const payloadTypes = [];
 
         if (currentCommandType === 'homekit' || currentCommandType === 'nothing') {
-            that.debug.log('⚠️  Command type is', currentCommandType, '- skipping z2m_payload');
+            that.debug.log('⚠️ Command type is', currentCommandType, '- skipping z2m_payload');
         } 
         else if (z2mPayloadOptions.length > 0) {
             that.debug.log('✅ Adding z2m_payload type WITH', z2mPayloadOptions.length, 'options');
 
-        // NOVO: Verificar se o comando é numérico para adicionar manual input
             const isNumericCommand = currentCommand && (
                 currentCommand.toLowerCase().includes('countdown') ||
                 currentCommand.toLowerCase().includes('brightness') ||
@@ -825,7 +804,7 @@ class Zigbee2MqttEditor {
             );
             
             that.debug.log('🔍 Command is numeric:', isNumericCommand);
-                // Adicionar opção "Manual input" APENAS para comandos numéricos
+            
             let finalOptions = z2mPayloadOptions;
             if (isNumericCommand) {
                 finalOptions = [...z2mPayloadOptions, {
@@ -834,7 +813,7 @@ class Zigbee2MqttEditor {
                 }];
                 that.debug.log('✅ Added manual input option (numeric command)');
             } else {
-                that.debug.log('⚠️  Skipped manual input option (not numeric)');
+                that.debug.log('⚠️ Skipped manual input option (not numeric)');
             }
             
             payloadTypes.push({
@@ -856,47 +835,72 @@ class Zigbee2MqttEditor {
 
         payloadTypes.push('msg', 'flow', 'global', 'str', 'num', 'json');
 
+        // ✅ FIX: Ler valores SEMPRE do node primeiro, e só depois do typedInput
         let currentType = that.node.payloadType || 'msg';
         let currentValue = that.node.payload || 'payload';
 
+        that.debug.log('🔍 Initial values from node:', currentType, '/', currentValue);
+
+        // ✅ Tentar ler do typedInput APENAS se já existe e não é a primeira vez
         try {
             if (that.getDevicePayloadInput().data('typedInput')) {
-                currentType = that.getDevicePayloadInput().typedInput('type');
-                currentValue = that.getDevicePayloadInput().typedInput('value');
+                const existingType = that.getDevicePayloadInput().typedInput('type');
+                const existingValue = that.getDevicePayloadInput().typedInput('value');
+                
+                // ✅ Se existem valores no typedInput, usar esses
+                if (existingType && existingValue !== undefined) {
+                    currentType = existingType;
+                    currentValue = existingValue;
+                    that.debug.log('✅ Found existing typedInput values:', currentType, '/', currentValue);
+                }
             }
         } catch(e) {
-            // Primeira vez
+            that.debug.log('⚠️ No existing typedInput, using node values');
         }
-        // NOVO: Se tinha valor manual gravado, restaurar para __manual__
+
+        // ✅ Se tinha valor manual gravado, restaurar para __manual__
         if (that.node.manualPayloadValue && that.node.manualPayloadValue !== '' && that.node.manualPayloadValue !== '0') {
             that.debug.log('🔄 Restoring manual mode, value was:', that.node.manualPayloadValue);
             currentValue = '__manual__';
         }
         
+        // ✅ Se temos opções z2m e o tipo atual não é z2m, mudar para z2m
         if (z2mPayloadOptions.length > 0) {
-            currentType = 'z2m_payload';
+            // ✅ MAS: Se o tipo atual é msg/flow/global/str/num/json, MANTER!
+            if (!['msg', 'flow', 'global', 'str', 'num', 'json'].includes(currentType)) {
+                currentType = 'z2m_payload';
+                that.debug.log('⚠️ Changed type to z2m_payload because we have options');
+            } else {
+                that.debug.log('✅ Keeping existing type:', currentType);
+            }
         }
 
-        that.debug.log('📝 Current payload state:', currentType, '/', currentValue);
+        that.debug.log('🔍 Current payload state:', currentType, '/', currentValue);
 
-        // ATUALIZADO: Só validar se NÃO for __manual__
+        // ✅ Validar se o valor existe nas opções (apenas para z2m_payload)
         if (currentType === 'z2m_payload' && z2mPayloadOptions.length > 0 && currentValue !== '__manual__') {
             const valueExists = z2mPayloadOptions.some(opt => opt.value === currentValue);
             if (!valueExists) {
                 currentValue = z2mPayloadOptions[0]?.value || '';
-                that.debug.log('⚠️  Value not found, using:', currentValue);
+                that.debug.log('⚠️ Value not found in options, using:', currentValue);
             }
         }
 
+        // ✅ CRITICAL: Para tipos msg/flow/global, garantir valor padrão
+        if (['msg', 'flow', 'global'].includes(currentType) && (!currentValue || currentValue === '')) {
+            currentValue = 'payload';
+            that.debug.log('✅ Set default value "payload" for type:', currentType);
+        }
+
         that.getDevicePayloadInput().typedInput({
-            default: 'z2m_payload',
+            default: z2mPayloadOptions.length > 0 ? 'z2m_payload' : 'msg',
             value: currentValue,
             typeField: that.getDevicePayloadTypeInput(),
         });
 
         that.getDevicePayloadInput().typedInput('types', payloadTypes);    
 
-        // NOVO: Se currentValue é __manual__ mas não existe nas opções, usar primeira opção
+        // ✅ Se currentValue é __manual__ mas não existe nas opções, usar primeira opção
         if (currentValue === '__manual__') {
             const hasManualOption = payloadTypes.some(type => {
                 if (type.options) {
@@ -906,9 +910,9 @@ class Zigbee2MqttEditor {
             });
             
             if (!hasManualOption) {
-                that.debug.log('⚠️  Manual mode requested but not available for this command');
-                currentValue = z2mPayloadOptions[0]?.value || '';
-                that.debug.log('   Using first option instead:', currentValue);
+                that.debug.log('⚠️ Manual mode requested but not available for this command');
+                currentValue = z2mPayloadOptions[0]?.value || 'payload';
+                that.debug.log('   Using fallback value:', currentValue);
             }
         }
         
@@ -922,7 +926,6 @@ class Zigbee2MqttEditor {
         
         that.debug.log('═══════════════════════════════════════════════════════');
     }
-
     buildDeviceOptionsInput() {
         let that = this;
         if (!that.getDeviceOptionsInput()) return;
