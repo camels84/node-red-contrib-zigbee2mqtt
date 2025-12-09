@@ -833,7 +833,13 @@ module.exports = function(RED) {
                         payload: availabilityStatus,
                     });
                     if (node.bridge_state !== null || !availabilityStatus) {
-                        node.warn(`Bridge ${availabilityStatus ? 'online' : 'offline'}`)
+                        if (!availabilityStatus) {
+                            node.warn(`Bridge offline`)
+                        }
+                        // ✅ Log silencioso quando fica online (apenas em debug)
+                        else if (typeof Z2MDebug !== 'undefined' && Z2MDebug.isEnabled()) {
+                            node.log(`Bridge online`)
+                        }
                     }
                     node.bridge_state = availabilityStatus
                 } else if (node.getTopic('/bridge/info') === topic) {
